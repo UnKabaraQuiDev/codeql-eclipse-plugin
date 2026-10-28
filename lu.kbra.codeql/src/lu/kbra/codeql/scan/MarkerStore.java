@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -16,8 +17,11 @@ import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jface.text.BadLocationException;
 import org.eclipse.jface.text.Document;
 
@@ -92,58 +96,159 @@ public final class MarkerStore {
 		}
 	}
 
-	public static void apply(final IProject project, final List<SarifReader.Finding> findings, final Predicate<IFile> selected) throws CoreException {
-		// Only delete in the selected scope. A single-file rescan keeps other files' markers intact.
-		for (final IMarker marker : project.findMarkers(CodeQlPlugin.MARKER, true, IResource.DEPTH_INFINITE)) {
-			if (marker.getResource() instanceof final IFile file && selected.test(file)) {
+	public static void apply(final IProject project, final List<SarifReader.Finding> findings, final Predicate<IFile> selected)
+			throws CoreException {
+
+		final IWorkspaceRoot root = ResourcesPlugin.getWorkspace().getRoot();
+
+		// Resolve findings first, so we know which Eclipse projects own them.
+		final Map<SarifReader.Finding, IFile> resolved = new LinkedHashMap<>();
+
+		for (final SarifReader.Finding finding : findings) {
+			final IFile candidate = MarkerStore.findFile(project, finding);
+			if (candidate == null) {
+				continue;
+			}
+
+			final IFile file = MarkerStore.resolveOwningFile(candidate);
+
+			if (file != null && selected.test(file)) {
+				resolved.put(finding, file);
+			}
+		}
+
+		// Clean up CodeQL markers throughout the relevant workspace scope.
+		// This also removes old markers incorrectly attached to the aggregator.
+		for (final IMarker marker : root.findMarkers(CodeQlPlugin.MARKER, true, IResource.DEPTH_INFINITE)) {
+
+			if (marker.getResource() instanceof final IFile file && MarkerStore.isWithinScanScope(project, file) && selected.test(file)) {
 				marker.delete();
 			}
 		}
+
 		final Map<IFile, Document> documents = new HashMap<>();
+
 		final Map<String, String> severityLevels = Map.of(Settings.HIGH,
 				Settings.resolve(project, Settings.HIGH).text(),
 				Settings.MEDIUM,
 				Settings.resolve(project, Settings.MEDIUM).text(),
 				Settings.LOW,
 				Settings.resolve(project, Settings.LOW).text());
-		for (final SarifReader.Finding finding : findings) {
-			final IFile file = MarkerStore.findFile(project, finding);
-			if (file == null || !selected.test(file)) {
-				continue;
-			}
+
+		for (final Map.Entry<SarifReader.Finding, IFile> entry : resolved.entrySet()) {
+			final SarifReader.Finding finding = entry.getKey();
+			final IFile file = entry.getValue();
+
 			final IMarker marker = file.createMarker(CodeQlPlugin.MARKER);
+
 			marker.setAttribute(IMarker.MESSAGE, "[CodeQL " + finding.ruleId() + "] " + finding.message());
+
 			marker.setAttribute(IMarker.SOURCE_ID, CodeQlPlugin.ID);
 			marker.setAttribute("ruleId", finding.ruleId());
 			marker.setAttribute("codeqlLevel", finding.level().name());
+
 			final String key = switch (finding.level()) {
 			case HIGH -> Settings.HIGH;
 			case MEDIUM -> Settings.MEDIUM;
 			case LOW -> Settings.LOW;
 			};
+
 			final String severity = severityLevels.get(key);
+
 			marker.setAttribute(IMarker.SEVERITY, switch (severity) {
 			case "error" -> IMarker.SEVERITY_ERROR;
 			case "info" -> IMarker.SEVERITY_INFO;
 			default -> IMarker.SEVERITY_WARNING;
 			});
+
 			marker.setAttribute(IMarker.LINE_NUMBER, finding.startLine());
+
 			final Document document = documents.computeIfAbsent(file, MarkerStore::loadDocument);
+
 			if (document != null) {
 				try {
-					final int startLine = Math.min(finding.startLine() - 1, document.getNumberOfLines() - 1);
-					final int endLine = Math.min(finding.endLine() - 1, document.getNumberOfLines() - 1);
+					final int startLine = Math.max(0, Math.min(finding.startLine() - 1, document.getNumberOfLines() - 1));
+
+					final int endLine = Math.max(0, Math.min(finding.endLine() - 1, document.getNumberOfLines() - 1));
+
 					final int start = MarkerStore.columnOffset(document, startLine, finding.startColumn());
+
 					int end = MarkerStore.columnOffset(document, endLine, finding.endColumn());
+
 					if (end <= start) {
 						end = Math.min(document.getLength(), start + 1);
 					}
+
 					marker.setAttribute(IMarker.CHAR_START, start);
 					marker.setAttribute(IMarker.CHAR_END, end);
+
 				} catch (final BadLocationException ignored) {
-					/* line-only marker still works */ }
+					// Line-only marker still works.
+				}
 			}
 		}
+	}
+
+	private static IFile resolveOwningFile(final IFile candidate) {
+		final IPath location = candidate.getLocation();
+
+		if (location == null) {
+			return candidate.exists() ? candidate : null;
+		}
+
+		final IWorkspaceRoot root = ResourcesPlugin.getWorkspace().getRoot();
+		final IFile[] matches = root.findFilesForLocationURI(location.toFile().toURI());
+
+		IFile best = null;
+		int bestScore = Integer.MIN_VALUE;
+
+		for (final IFile file : matches) {
+			if (!file.exists() || !file.getProject().isOpen()) {
+				continue;
+			}
+
+			int score = 0;
+
+			try {
+				if (file.getProject().hasNature(JavaCore.NATURE_ID)) {
+					score += 100;
+				}
+			} catch (final CoreException ignored) {
+				// Treat as non-Java project.
+			}
+
+			// Prefer a resource directly inside its owning project,
+			// rather than a nested copy exposed by the aggregator.
+			if (file.getProject().getLocation() != null && file.getLocation() != null) {
+
+				final IPath projectLocation = file.getProject().getLocation();
+				final IPath fileLocation = file.getLocation();
+
+				if (projectLocation.isPrefixOf(fileLocation)) {
+					score += projectLocation.segmentCount();
+				}
+			}
+
+			if (score > bestScore) {
+				best = file;
+				bestScore = score;
+			}
+		}
+
+		return best != null ? best
+				: candidate.exists() ? candidate
+				: null;
+	}
+
+	private static boolean isWithinScanScope(final IProject scanProject, final IFile file) {
+		final IPath scanLocation = scanProject.getLocation();
+		final IPath fileLocation = file.getLocation();
+
+		if (scanLocation == null || fileLocation == null) {
+			return file.getProject().equals(scanProject);
+		}
+
+		return scanLocation.isPrefixOf(fileLocation);
 	}
 
 	private static Document loadDocument(final IFile file) {

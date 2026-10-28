@@ -2,7 +2,7 @@
 <feature
       id="lu.kbra.codeql.feature"
       label="CodeQL for Eclipse"
-      version="1.0.0.qualifier"
+      version="1.0.1.qualifier"
       provider-name="UnKabaraQuiDev">
 
    <description>
