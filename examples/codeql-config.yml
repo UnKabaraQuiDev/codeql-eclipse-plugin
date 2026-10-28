@@ -1,3 +1,14 @@
-name: CodeQL config
+name: "Java CodeQL Config"
 
-disable-default-queries: false
+# Files and directories to exclude from analysis
+paths-ignore:
+  - '**/target/**'
+  - '**/build/**'
+  - '**/generated/**'
+  - '**/test/**'
+  - '**/tests/**'
+
+# Queries to run during analysis
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
