@@ -38,6 +38,16 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Set up Maven 3.9.9
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: '3.9.9'
+
+      - name: Verify build environment
+        run: |
+          java -version
+          mvn -version
+
       - name: Build Eclipse plugin
         run: mvn --batch-mode --no-transfer-progress clean verify
 
