@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+  <feature url="features/lu.kbra.codeql.feature_1.0.0.qualifier.jar" id="lu.kbra.codeql.feature" version="1.0.0.qualifier">
+    <category name="codeql"/>
+  </feature>
+  <category-def name="codeql" label="CodeQL Integration"/>
+</site>

@@ -1,0 +1,49 @@
+name: Deploy Pages
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build and Publish Eclipse Plugin"]
+    types: [completed]
+  push:
+    branches:
+      - pages
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PAGES_HOST }}
+          username: ${{ secrets.PAGES_USERNAME }}
+          key: ${{ secrets.PAGES_SSH_KEY }}
+          port: ${{ secrets.PAGES_PORT }}
+          script: |
+            set -e
+
+            mkdir -p /var/www
+            cd /var/www
+
+            git config --global --add safe.directory /var/www/eclipse.kbra.lu
+            git config --global --add safe.directory /var/www/eclipse.kbra.lu/codeql
+
+            if [ ! -d "eclipse.kbra.lu/codeql/.git" ]; then
+              rm -rf eclipse.kbra.lu/codeql/*
+              git clone \
+                --branch pages \
+                https://${{ secrets.GH_PAT }}@github.com/UnKabaraQuiDev/codeql-eclipse-plugin.git \
+                eclipse.kbra.lu
+            fi
+
+            cd /var/www/eclipse.kbra.lu/codeql/
+
+            git fetch origin pages
+            git checkout pages
+            git reset --hard origin/pages

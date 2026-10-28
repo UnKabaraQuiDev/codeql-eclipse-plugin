@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feature
+      id="lu.kbra.codeql.feature"
+      label="CodeQL for Eclipse"
+      version="1.0.0.qualifier"
+      provider-name="UnKabaraQuiDev">
+
+   <description>
+      Run the CodeQL CLI in Eclipse and display findings as native editor and Package Explorer markers.
+   </description>
+
+   <plugin
+         id="lu.kbra.codeql"
+         version="0.0.0"/>
+
+</feature>

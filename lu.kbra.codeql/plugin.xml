@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+  <extension point="org.eclipse.core.resources.markers" id="problem" name="CodeQL finding">
+    <super type="org.eclipse.core.resources.problemmarker"/>
+    <persistent value="true"/>
+    <attribute name="ruleId"/>
+    <attribute name="codeqlLevel"/>
+  </extension>
+  <extension point="org.eclipse.ui.commands">
+    <category id="lu.kbra.codeql.commands" name="CodeQL"/>
+    <command id="lu.kbra.codeql.rescanFile" categoryId="lu.kbra.codeql.commands" name="Rescan current file"/>
+    <command id="lu.kbra.codeql.rescanPackage" categoryId="lu.kbra.codeql.commands" name="Rescan package"/>
+    <command id="lu.kbra.codeql.rescanAll" categoryId="lu.kbra.codeql.commands" name="Rescan all"/>
+    <command id="lu.kbra.codeql.toggleMarkers" categoryId="lu.kbra.codeql.commands" name="Hide/Show CodeQL markers"/>
+  </extension>
+  <extension point="org.eclipse.ui.handlers">
+    <handler commandId="lu.kbra.codeql.rescanFile" class="lu.kbra.codeql.ui.CodeQlHandler"/>
+    <handler commandId="lu.kbra.codeql.rescanPackage" class="lu.kbra.codeql.ui.CodeQlHandler"/>
+    <handler commandId="lu.kbra.codeql.rescanAll" class="lu.kbra.codeql.ui.CodeQlHandler"/>
+    <handler commandId="lu.kbra.codeql.toggleMarkers" class="lu.kbra.codeql.ui.CodeQlHandler"/>
+  </extension>
+  <extension point="org.eclipse.ui.commandImages">
+    <image commandId="lu.kbra.codeql.rescanFile" icon="icons/file.png"/>
+    <image commandId="lu.kbra.codeql.rescanPackage" icon="icons/package.png"/>
+    <image commandId="lu.kbra.codeql.rescanAll" icon="icons/all.png"/>
+    <image commandId="lu.kbra.codeql.toggleMarkers" icon="icons/eye.png"/>
+  </extension>
+  <extension point="org.eclipse.ui.menus">
+    <menuContribution locationURI="toolbar:org.eclipse.ui.main.toolbar?after=additions">
+      <toolbar id="lu.kbra.codeql.toolbar" label="CodeQL">
+        <command commandId="lu.kbra.codeql.rescanFile" tooltip="Rescan current editor file" style="push"/>
+        <command commandId="lu.kbra.codeql.rescanAll" tooltip="Rescan all Java projects" style="push"/>
+        <command commandId="lu.kbra.codeql.toggleMarkers" tooltip="Hide or show CodeQL markers" style="push"/>
+      </toolbar>
+    </menuContribution>
+    <menuContribution locationURI="popup:#CompilationUnitEditorContext?after=additions">
+      <menu id="lu.kbra.codeql.javaEditorMenu" label="CodeQL">
+        <command commandId="lu.kbra.codeql.rescanFile" label="Rescan current file"/>
+        <command commandId="lu.kbra.codeql.rescanAll" label="Rescan all"/>
+        <command commandId="lu.kbra.codeql.toggleMarkers" label="Hide/Show markers"/>
+      </menu>
+    </menuContribution>
+    <menuContribution locationURI="popup:#TextEditorContext?after=additions">
+      <menu id="lu.kbra.codeql.textEditorMenu" label="CodeQL">
+        <command commandId="lu.kbra.codeql.rescanFile" label="Rescan current file"/>
+        <command commandId="lu.kbra.codeql.rescanAll" label="Rescan all"/>
+        <command commandId="lu.kbra.codeql.toggleMarkers" label="Hide/Show markers"/>
+      </menu>
+    </menuContribution>
+    <menuContribution locationURI="popup:org.eclipse.jdt.ui.PackageExplorer?after=additions">
+      <menu id="lu.kbra.codeql.packageExplorerMenu" label="CodeQL">
+        <command commandId="lu.kbra.codeql.rescanFile" label="Rescan selected file"/>
+        <command commandId="lu.kbra.codeql.rescanPackage" label="Rescan package / selected folder"/>
+        <command commandId="lu.kbra.codeql.rescanAll" label="Rescan all"/>
+        <command commandId="lu.kbra.codeql.toggleMarkers" label="Hide/Show markers"/>
+      </menu>
+    </menuContribution>
+  </extension>
+  <extension point="org.eclipse.ui.preferencePages">
+    <page id="lu.kbra.codeql.preferences" name="CodeQL" class="lu.kbra.codeql.ui.CodeQlPreferencePage"/>
+  </extension>
+  <extension point="org.eclipse.ui.propertyPages">
+    <page id="lu.kbra.codeql.properties" name="CodeQL" class="lu.kbra.codeql.ui.CodeQlPropertyPage" objectClass="org.eclipse.core.resources.IProject" adaptable="true"/>
+  </extension>
+</plugin>
